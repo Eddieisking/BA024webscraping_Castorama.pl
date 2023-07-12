@@ -46,7 +46,7 @@ class SpiderSpider(scrapy.Spider):
         # Based on pages to build product_urls
         keyword = kwargs['keyword']
         product_urls = [f'https://www.castorama.pl/search?page={page}&term={keyword}' for page
-                        in range(1, pages+1)]
+                        in range(1, 2)]  #pages+1
 
         for product_url in product_urls:
             yield Request(url=product_url, callback=self.product_parse)
@@ -64,6 +64,7 @@ class SpiderSpider(scrapy.Spider):
 
         product_id = response.xpath('.//*[@id="product-details"]//td[@data-test-id="product-ean-spec"]/text()')[
             0].extract()
+        product_name = response.xpath('//*[@id="product-title"]/text()')[0].extract()
 
         # Product reviews url
         product_detailed_href = f'https://api.bazaarvoice.com/data/batch.json?passkey' \
@@ -76,10 +77,10 @@ class SpiderSpider(scrapy.Spider):
                                 f'=contentlocale%3Aeq%3Apl*%2Cpl_PL&limit.q0=8&offset.q0=0&limit_comments.q0=3 '
 
         if product_detailed_href:
-            yield Request(url=product_detailed_href, callback=self.review_parse)
+            yield Request(url=product_detailed_href, callback=self.review_parse, meta={'product_name': product_name})
 
     def review_parse(self, response: Request, **kwargs):
-
+        product_name = response.meta['product_name']
         datas = json.loads(response.body)
         batch_results = datas.get('BatchedResults', {})
 
@@ -102,8 +103,8 @@ class SpiderSpider(scrapy.Spider):
 
             try:
                 item['review_id'] = results[i].get('Id', 'N/A')
-                item['product_name'] = results[i].get('ProductId', 'N/A')
-                item['customer_name'] = results[i].get('UserNickname', 'N/A')
+                item['product_name'] = product_name
+                item['customer_name'] = results[i]['UserNickname'] if results[i]['UserNickname'] else 'Anonymous'
                 item['customer_rating'] = results[i].get('Rating', 'N/A')
                 item['customer_date'] = results[i].get('SubmissionTime', 'N/A')
                 item['customer_review'] = results[i].get('ReviewText', 'N/A')
