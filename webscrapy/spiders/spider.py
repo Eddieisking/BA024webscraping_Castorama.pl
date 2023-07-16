@@ -117,5 +117,5 @@ class SpiderSpider(scrapy.Spider):
         if (offset_number + limit_number) < total_number:
             offset_number += limit_number
             next_page = re.sub(r'limit.q0=\d+&offset.q0=\d+', f'limit.q0={30}&offset.q0={offset_number}', response.url)
-            yield Request(url=next_page, callback=self.review_parse)
+            yield Request(url=next_page, callback=self.review_parse, meta={'product_name': product_name})
 
