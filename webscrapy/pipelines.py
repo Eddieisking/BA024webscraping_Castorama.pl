@@ -66,7 +66,7 @@ def translator(text: str, src: str):
     # print(googletrans.LANGUAGES)
 
     translator = Translator()
-    result = translator.translate(text, src='pl', dest='en')
+    result = translator.translate(text, src=src, dest='en')
 
     return result.text
 
