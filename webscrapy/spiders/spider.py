@@ -20,8 +20,8 @@ class SpiderSpider(scrapy.Spider):
     def start_requests(self):
         # keywords = ['Stanley', 'Black+Decker', 'Craftsman', 'Porter-Cable', 'Bostitch', 'Facom', 'MAC Tools', 'Vidmar', 'Lista', 'Irwin Tools', 'Lenox', 'Proto', 'CribMaster', 'Powers Fasteners', 'cub-cadet', 'hustler', 'troy-bilt', 'rover', 'BigDog Mower', 'MTD']
         exist_keywords = ['dewalt', 'Stanley', 'Black+Decker', 'Irwin',]
-        keyword = 'dewalt'
         # company = 'Stanley Black and Decker'
+
         # from search words to generate product_urls
         for keyword in exist_keywords:
             push_key = {'keyword': keyword}
@@ -43,7 +43,7 @@ class SpiderSpider(scrapy.Spider):
         # Based on pages to build product_urls
         keyword = kwargs['keyword']
         product_urls = [f'https://www.castorama.pl/search?page={page}&term={keyword}' for page
-                        in range(1, pages+1)]  #pages+1
+                        in range(1, pages+1)]  #  pages+1
 
         for product_url in product_urls:
             yield Request(url=product_url, callback=self.product_parse, meta={'product_brand':keyword})
