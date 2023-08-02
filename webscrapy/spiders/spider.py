@@ -20,6 +20,7 @@ class SpiderSpider(scrapy.Spider):
     def start_requests(self):
         # keywords = ['Stanley', 'Black+Decker', 'Craftsman', 'Porter-Cable', 'Bostitch', 'Facom', 'MAC Tools', 'Vidmar', 'Lista', 'Irwin Tools', 'Lenox', 'Proto', 'CribMaster', 'Powers Fasteners', 'cub-cadet', 'hustler', 'troy-bilt', 'rover', 'BigDog Mower', 'MTD']
         exist_keywords = ['dewalt', 'Stanley', 'Black+Decker', 'Irwin',]
+        keyword = 'dewalt'
         # company = 'Stanley Black and Decker'
         # from search words to generate product_urls
         for keyword in exist_keywords:
@@ -35,10 +36,8 @@ class SpiderSpider(scrapy.Spider):
             )
 
     def parse(self, response, **kwargs):
-
-        # Extract the pages of product_urls
-        page = response.xpath('//p[@data-test-id="search-options-total-results"]/text()')[0].extract()
-        page_number = int(''.join(filter(str.isdigit, page)))
+        # extract the total number of product results
+        page_number = int(re.search(r'"totalResults":(\d+)', response.body.decode('utf-8')).group(1))
         pages = (page_number // 24) + 1
 
         # Based on pages to build product_urls
@@ -47,22 +46,38 @@ class SpiderSpider(scrapy.Spider):
                         in range(1, pages+1)]  #pages+1
 
         for product_url in product_urls:
-            yield Request(url=product_url, callback=self.product_parse)
+            yield Request(url=product_url, callback=self.product_parse, meta={'product_brand':keyword})
 
     def product_parse(self, response: Request, **kwargs):
+        product_brand = response.meta['product_brand']
+        # extract the product url link from each page of product list
+        product_urls = re.findall(r'"shareableUrl":"(.*?)"', response.body.decode('utf-8'))
 
-        product_list = response.xpath('//*[@id="content"]//main//ul/li')
-
-        for product in product_list:
-            product_href = product.xpath('.//div[@data-test-id="product-panel"]/a/@href')[0].extract()
-            product_detailed_url = f'https://www.castorama.pl{product_href}'
-            yield Request(url=product_detailed_url, callback=self.product_detailed_parse)
+        for product_url in product_urls:
+            product_detailed_url = product_url.encode().decode('unicode-escape')
+            yield Request(url=product_detailed_url, callback=self.product_detailed_parse, meta={'product_brand':product_brand})
 
     def product_detailed_parse(self, response, **kwargs):
-
+        product_brand = response.meta['product_brand']
         product_id = response.xpath('.//*[@id="product-details"]//td[@data-test-id="product-ean-spec"]/text()')[
             0].extract()
         product_name = response.xpath('//*[@id="product-title"]/text()')[0].extract()
+        product_detail = response.xpath('.//tbody/tr')
+
+        # extract product detail infor
+        product_type = 'N/A'
+        product_model = 'N/A'
+
+        for product in product_detail:
+            th_text = product.xpath('./th/text()')[0].extract()
+            td_text = product.xpath('./td/text()').extract()
+
+            if th_text == "Typ produktu":
+                product_type = td_text[0] if td_text else 'N/A'
+            elif th_text == 'Marka':
+                product_brand = td_text[0] if td_text else 'N/A'
+            elif th_text == 'Kod produktu':
+                product_model = td_text[0] if td_text else 'N/A'
 
         # Product reviews url
         product_detailed_href = f'https://api.bazaarvoice.com/data/batch.json?passkey' \
@@ -75,10 +90,14 @@ class SpiderSpider(scrapy.Spider):
                                 f'=contentlocale%3Aeq%3Apl*%2Cpl_PL&limit.q0=8&offset.q0=0&limit_comments.q0=3 '
 
         if product_detailed_href:
-            yield Request(url=product_detailed_href, callback=self.review_parse, meta={'product_name': product_name})
+            yield Request(url=product_detailed_href, callback=self.review_parse, meta={'product_name': product_name, 'product_type':product_type, 'product_brand':product_brand, 'product_model':product_model})
 
     def review_parse(self, response: Request, **kwargs):
         product_name = response.meta['product_name']
+        product_type = response.meta['product_type']
+        product_brand = response.meta['product_brand']
+        product_model = response.meta['product_model']
+
         datas = json.loads(response.body)
         batch_results = datas.get('BatchedResults', {})
 
@@ -101,7 +120,11 @@ class SpiderSpider(scrapy.Spider):
 
             try:
                 item['review_id'] = results[i].get('Id', 'N/A')
+                item['product_website'] = 'castorama_pl'
                 item['product_name'] = product_name
+                item['product_type'] = product_type
+                item['product_brand'] = product_brand
+                item['product_model'] = product_model
                 item['customer_name'] = results[i]['UserNickname'] if results[i]['UserNickname'] else 'Anonymous'
                 item['customer_rating'] = results[i].get('Rating', 'N/A')
                 item['customer_date'] = results[i].get('SubmissionTime', 'N/A')
@@ -111,11 +134,10 @@ class SpiderSpider(scrapy.Spider):
 
                 yield item
             except Exception as e:
-                print('Exception:', e)
                 break
 
         if (offset_number + limit_number) < total_number:
             offset_number += limit_number
             next_page = re.sub(r'limit.q0=\d+&offset.q0=\d+', f'limit.q0={30}&offset.q0={offset_number}', response.url)
-            yield Request(url=next_page, callback=self.review_parse, meta={'product_name': product_name})
+            yield Request(url=next_page, callback=self.review_parse, meta={'product_name': product_name, 'product_type':product_type, 'product_brand':product_brand, 'product_model':product_model})
 
