@@ -15,13 +15,13 @@ from webscrapy.items import WebscrapyItem
 class SpiderSpider(scrapy.Spider):
     name = "spider"
     allowed_domains = ["www.castorama.pl", "api.bazaarvoice.com"]
-    headers = {}  #
+    headers = {} 
 
     def start_requests(self):
         # keywords = ['Stanley', 'Black+Decker', 'Craftsman', 'Porter-Cable', 'Bostitch', 'Facom', 'MAC Tools', 'Vidmar', 'Lista', 'Irwin Tools', 'Lenox', 'Proto', 'CribMaster', 'Powers Fasteners', 'cub-cadet', 'hustler', 'troy-bilt', 'rover', 'BigDog Mower', 'MTD']
         exist_keywords = ['dewalt', 'Stanley', 'Black+Decker', 'Irwin',]
+        
         # company = 'Stanley Black and Decker'
-
         # from search words to generate product_urls
         for keyword in exist_keywords:
             push_key = {'keyword': keyword}
@@ -31,8 +31,6 @@ class SpiderSpider(scrapy.Spider):
                 url=search_url,
                 callback=self.parse,
                 cb_kwargs=push_key,
-                # meta={'proxy':'socks5://127.0.0.1:10110'},
-                # headers=self.headers
             )
 
     def parse(self, response, **kwargs):
@@ -50,6 +48,7 @@ class SpiderSpider(scrapy.Spider):
 
     def product_parse(self, response: Request, **kwargs):
         product_brand = response.meta['product_brand']
+        
         # extract the product url link from each page of product list
         product_urls = re.findall(r'"shareableUrl":"(.*?)"', response.body.decode('utf-8'))
 
@@ -71,7 +70,6 @@ class SpiderSpider(scrapy.Spider):
         for product in product_detail:
             th_text = product.xpath('./th/text()')[0].extract()
             td_text = product.xpath('./td/text()').extract()
-
             if th_text == "Typ produktu":
                 product_type = td_text[0] if td_text else 'N/A'
             elif th_text == 'Marka':
@@ -97,19 +95,15 @@ class SpiderSpider(scrapy.Spider):
         product_type = response.meta['product_type']
         product_brand = response.meta['product_brand']
         product_model = response.meta['product_model']
-
         datas = json.loads(response.body)
         batch_results = datas.get('BatchedResults', {})
-
         offset_number = 0
         limit_number = 0
         total_number = 0
-
         if "q1" in batch_results:
             result_key = "q1"
         else:
             result_key = "q0"
-
         offset_number = batch_results.get(result_key, {}).get('Offset', 0)
         limit_number = batch_results.get(result_key, {}).get('Limit', 0)
         total_number = batch_results.get(result_key, {}).get('TotalResults', 0)
@@ -117,7 +111,6 @@ class SpiderSpider(scrapy.Spider):
         for i in range(limit_number):
             item = WebscrapyItem()
             results = batch_results.get(result_key, {}).get('Results', [])
-
             try:
                 item['review_id'] = results[i].get('Id', 'N/A')
                 item['product_website'] = 'castorama_pl'
